@@ -638,7 +638,7 @@ func TestOIDCLoginLogout(t *testing.T) {
 		State:    util.GenerateOpaqueString(),
 		Nonce:    util.GenerateOpaqueString(),
 		Audience: tokenAudienceWebClient,
-		IssuedAt: util.GetTimeAsMsSinceEpoch(time.Now().Add(-10 * time.Minute)),
+		IssuedAt: util.GetTimeAsMsSinceEpoch(time.Now().Add(-15 * time.Minute)),
 	}
 	oidcMgr.addPendingAuth(expiredAuthReq)
 	rr = httptest.NewRecorder()
@@ -1554,6 +1554,35 @@ func TestOIDCLogoutErrors(t *testing.T) {
 	server.doOIDCFromLogout("")
 }
 
+func TestOIDCLogoutFromProviderRequest(t *testing.T) {
+	type logoutRequest struct {
+		method      string
+		rawQuery    string
+		idTokenHint string
+	}
+	requests := make(chan logoutRequest, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.NoError(t, r.ParseForm())
+		requests <- logoutRequest{
+			method:      r.Method,
+			rawQuery:    r.URL.RawQuery,
+			idTokenHint: r.PostForm.Get("id_token_hint"),
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	server := getTestOIDCServer()
+	server.binding.OIDC.providerLogoutURL = ts.URL + "/logout?p=1"
+	// the ID token is sent in the form body and never in the URL
+	server.doOIDCFromLogout("id_token_val")
+	require.Len(t, requests, 1)
+	req := <-requests
+	assert.Equal(t, http.MethodPost, req.method)
+	assert.Equal(t, "p=1", req.rawQuery)
+	assert.Equal(t, "id_token_val", req.idTokenHint)
+}
+
 func TestOIDCToken(t *testing.T) {
 	admin := dataprovider.Admin{
 		Username:    "test_oidc_admin",
@@ -1791,7 +1820,7 @@ func TestMemoryOIDCManager(t *testing.T) {
 	assert.NoError(t, err)
 	oidcMgr.removePendingAuth(authReq.State)
 	require.Len(t, oidcMgr.pendingAuths, 0)
-	authReq.IssuedAt = util.GetTimeAsMsSinceEpoch(time.Now().Add(-600 * time.Second))
+	authReq.IssuedAt = util.GetTimeAsMsSinceEpoch(time.Now().Add(-900 * time.Second))
 	oidcMgr.addPendingAuth(authReq)
 	require.Len(t, oidcMgr.pendingAuths, 1)
 	_, err = oidcMgr.getPendingAuth(authReq.State)

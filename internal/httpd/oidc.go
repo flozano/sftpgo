@@ -41,7 +41,7 @@ const (
 	oidcCookieKey          = "oidc"
 	oidcBrowserCookieKey   = "oidc_browser"
 	adminRoleFieldValue    = "admin"
-	authStateValidity      = 2 * 60 * 1000 // 2 minutes
+	authStateValidity      = 10 * 60 * 1000 // 10 minutes
 	maxWebClientNextLength = 4096
 	emailVerifiedClaim     = "email_verified"
 	tokenUpdateInterval    = 3 * 60 * 1000   // 3 minutes
@@ -932,19 +932,15 @@ func (s *httpdServer) logoutFromOIDCOP(idToken string) {
 }
 
 func (s *httpdServer) doOIDCFromLogout(idToken string) {
-	logoutURL, err := url.Parse(s.binding.OIDC.providerLogoutURL)
-	if err != nil {
-		logger.Warn(logSender, "", "oidc: unable to parse logout URL: %v", err)
-		return
-	}
-	query := logoutURL.Query()
+	logoutURL := s.binding.OIDC.providerLogoutURL
+	form := url.Values{}
 	if idToken != "" {
-		query.Set("id_token_hint", idToken)
+		form.Set("id_token_hint", idToken)
 	}
-	logoutURL.RawQuery = query.Encode()
-	resp, err := httpclient.RetryableGet(logoutURL.String())
+	resp, err := httpclient.RetryablePost(logoutURL, "application/x-www-form-urlencoded",
+		strings.NewReader(form.Encode()))
 	if err != nil {
-		logger.Warn(logSender, "", "oidc: error calling logout URL %q: %v", logoutURL.String(), err)
+		logger.Warn(logSender, "", "oidc: error calling logout URL %q: %v", logoutURL, err)
 		return
 	}
 	defer resp.Body.Close()

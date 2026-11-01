@@ -3272,9 +3272,19 @@ func TestHTTPDFile(t *testing.T) {
 	assert.Error(t, err)
 	assert.Error(t, httpdFile.ErrTransfer)
 	assert.Equal(t, err, httpdFile.ErrTransfer)
+	// an abort signal without an explicit error maps to the quota error after the next write
+	abortFile, err := os.CreateTemp("", "abort")
+	assert.NoError(t, err)
+	httpdFile.writer = abortFile
+	httpdFile.ErrTransfer = nil
 	httpdFile.SignalClose(nil)
-	_, err = httpdFile.Write(nil)
+	_, err = httpdFile.Write([]byte("a"))
 	assert.ErrorIs(t, err, common.ErrQuotaExceeded)
+	assert.ErrorIs(t, httpdFile.ErrTransfer, common.ErrQuotaExceeded)
+	err = abortFile.Close()
+	assert.NoError(t, err)
+	err = os.Remove(abortFile.Name())
+	assert.NoError(t, err)
 }
 
 func TestChangeUserPwd(t *testing.T) {
@@ -4808,4 +4818,53 @@ func TestNextRenderableEntries(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, finished)
 	assert.Empty(t, entries)
+}
+
+func TestTaskConnectionDisconnectAfterResponse(t *testing.T) {
+	username := "task_connection_user"
+	user := dataprovider.User{
+		BaseUser: sdk.BaseUser{
+			Username: username,
+			Password: "pwd",
+			HomeDir:  filepath.Join(os.TempDir(), username),
+			Status:   1,
+		},
+	}
+	user.Permissions = map[string][]string{"/": {dataprovider.PermAny}}
+	err := dataprovider.AddUser(&user, "", "", "")
+	require.NoError(t, err)
+	defer func() {
+		_ = dataprovider.DeleteUser(username, "", "", "")
+	}()
+
+	conns := make(chan *Connection, 1)
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(jwt.NewContext(r.Context(), &jwt.Claims{Username: username}, nil))
+		conn, err := getUserTaskConnection(w, r)
+		if err != nil {
+			conns <- nil
+			return
+		}
+		conns <- conn
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+	defer srv.Close()
+
+	resp, err := srv.Client().Get(srv.URL)
+	require.NoError(t, err)
+	err = resp.Body.Close()
+	require.NoError(t, err)
+	require.Equal(t, http.StatusAccepted, resp.StatusCode)
+	require.Equal(t, 2, resp.ProtoMajor)
+	conn := <-conns
+	require.NotNil(t, conn)
+	defer common.Connections.Remove(conn.GetID())
+	// the task outlives the request: closing its connection must not touch the
+	// completed HTTP/2 stream
+	assert.NotPanics(t, func() {
+		err = conn.Disconnect()
+	})
+	assert.Error(t, err)
 }
