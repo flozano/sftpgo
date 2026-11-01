@@ -516,6 +516,32 @@ func TestInitialization(t *testing.T) {
 	certMgr.Store(oldMgr)
 }
 
+func TestPassiveMultiplexingLimits(t *testing.T) {
+	oldProxyProtocol := common.Config.ProxyProtocol
+	defer func() {
+		common.Config.ProxyProtocol = oldProxyProtocol
+	}()
+
+	common.Config.ProxyProtocol = 0
+	binding := Binding{ApplyProxyConfig: true}
+	assert.Empty(t, binding.passiveMultiplexingLimits())
+
+	binding.PassiveConnectionsSecurity = 1
+	limits := binding.passiveMultiplexingLimits()
+	if assert.Len(t, limits, 1) {
+		assert.Contains(t, limits[0], "passive_connections_security")
+	}
+
+	common.Config.ProxyProtocol = 1
+	assert.Len(t, binding.passiveMultiplexingLimits(), 2)
+
+	binding.PassiveConnectionsSecurity = 0
+	limits = binding.passiveMultiplexingLimits()
+	if assert.Len(t, limits, 1) {
+		assert.Contains(t, limits[0], "proxy")
+	}
+}
+
 func TestServerGetSettings(t *testing.T) {
 	oldConfig := common.Config
 	oldMgr := certMgr.Load()
