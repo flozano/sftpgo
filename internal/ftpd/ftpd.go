@@ -139,6 +139,20 @@ func (b *Binding) isTLSModeValid() bool {
 	return b.TLSMode >= 0 && b.TLSMode <= 2
 }
 
+// passiveMultiplexingLimits returns what passive port multiplexing can't honor on this binding: data
+// connections are matched to a session by their source IP as soon as they are accepted, so before
+// reading any PROXY header and regardless of PassiveConnectionsSecurity.
+func (b *Binding) passiveMultiplexingLimits() []string {
+	var limits []string
+	if b.PassiveConnectionsSecurity == 1 {
+		limits = append(limits, "passive_connections_security is ignored, data connections must come from the control connection IP")
+	}
+	if b.HasProxy() {
+		limits = append(limits, "data connections arriving through the proxy are rejected")
+	}
+	return limits
+}
+
 func (b *Binding) checkSecuritySettings() error {
 	if b.PassiveConnectionsSecurity < 0 || b.PassiveConnectionsSecurity > 1 {
 		return fmt.Errorf("invalid passive_connections_security: %v", b.PassiveConnectionsSecurity)
@@ -298,7 +312,9 @@ type Configuration struct {
 	// Set to true to allow clients with different IP addresses to share the same passive port.
 	// This increases the number of concurrent passive transfers that can be served using a limited
 	// passive port range. Clients behind the same NAT or public IP are treated as a single client
-	// for multiplexing purposes.
+	// for multiplexing purposes. Data connections are matched by source IP, so they must come from the
+	// IP of the control connection whatever passive_connections_security says, and they are rejected
+	// if they arrive through a proxy using the PROXY protocol.
 	PassivePortMultiplexing bool `json:"passive_port_multiplexing" mapstructure:"passive_port_multiplexing"`
 	acmeDomain              string
 }

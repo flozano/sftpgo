@@ -24,7 +24,7 @@ require (
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/drakkan/webdav v0.0.0-20260827120142-f3e211091328
 	github.com/eikenb/pipeat v0.0.0-20260709234154-608894928e53
-	github.com/fclairamb/ftpserverlib v0.32.4
+	github.com/fclairamb/ftpserverlib v0.32.6
 	github.com/go-acme/lego/v4 v4.35.2
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-chi/render v1.0.3
@@ -68,7 +68,7 @@ require (
 	golang.org/x/crypto v0.57.0
 	golang.org/x/net v0.59.0
 	golang.org/x/oauth2 v0.37.0
-	golang.org/x/sys v0.48.0
+	golang.org/x/sys v0.49.0
 	golang.org/x/term v0.46.0
 	golang.org/x/time v0.16.0
 	google.golang.org/api v0.298.0
@@ -187,3 +187,5 @@ replace (
 	github.com/jlaffaye/ftp => github.com/drakkan/ftp v0.0.0-20240430173938-7ba8270c8e7f
 	github.com/robfig/cron/v3 => github.com/drakkan/cron/v3 v3.0.0-20230222140221-217a1e4d96c0
 )
+
+replace github.com/fclairamb/ftpserverlib => github.com/flozano/ftpserverlib v0.30.1-0.20261101072613-9c234abeaa21

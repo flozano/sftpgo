@@ -114,6 +114,13 @@ func (s *Server) GetSettings() (*ftpserver.Settings, error) {
 		return nil, errors.New("to enable TLS you need to provide a certificate")
 	}
 
+	if s.config.PassivePortMultiplexing {
+		for _, limit := range s.binding.passiveMultiplexingLimits() {
+			logger.WarnToConsole("passive_port_multiplexing on binding %v: %v", s.binding.GetAddress(), limit)
+			logger.Warn(logSender, "", "passive_port_multiplexing on binding %v: %v", s.binding.GetAddress(), limit)
+		}
+	}
+
 	settings := &ftpserver.Settings{
 		Listener:                        ftpListener,
 		ListenAddr:                      s.binding.GetAddress(),
